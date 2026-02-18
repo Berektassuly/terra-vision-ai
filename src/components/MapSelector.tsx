@@ -73,12 +73,21 @@ function DrawControl({
       onHasLayerChange(layerGroup.getLayers().length > 0);
     }
 
+    // Leaflet-draw adds new shapes to the map by default; move them into our FeatureGroup
+    // so that hasDrawnLayer updates and we can read bounds on confirm.
+    function onDrawCreated(e: L.LeafletEvent & { layer: L.Layer }) {
+      map.removeLayer(e.layer);
+      layerGroup.addLayer(e.layer);
+    }
+
+    map.on("draw:created", onDrawCreated);
     layerGroup.on("layeradd", updateHasLayer);
     layerGroup.on("layerremove", updateHasLayer);
     updateHasLayer();
 
     return () => {
       map.removeControl(drawControl);
+      map.off("draw:created", onDrawCreated);
       layerGroup.off("layeradd", updateHasLayer);
       layerGroup.off("layerremove", updateHasLayer);
     };
@@ -123,11 +132,7 @@ function MapSelectorInner({ onConfirm, onCancel }: MapSelectorProps) {
         </FeatureGroup>
       </MapContainer>
 
-      <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-2 rounded-xl border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <p className="text-xs font-medium text-muted-foreground">
-          Use the toolbar on the map to draw a polygon or edit it, then confirm selection below.
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="absolute right-4 bottom-4 z-[1000] flex items-center gap-2 rounded-xl border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
           <button
             type="button"
             onClick={onCancel}
@@ -143,7 +148,6 @@ function MapSelectorInner({ onConfirm, onCancel }: MapSelectorProps) {
           >
             Confirm Selection
           </button>
-        </div>
       </div>
     </>
   );
