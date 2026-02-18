@@ -159,11 +159,9 @@ export function ChatArea() {
       {isMapSelectionMode ? (
         <MapSelector onConfirm={handleMapConfirm} onCancel={handleMapCancel} />
       ) : (
-        <OrbitalPattern />
-      )}
-
-      {!isMapSelectionMode && (
-      <ScrollArea className="flex-1 px-4">
+        <>
+          <OrbitalPattern />
+          <ScrollArea className="flex-1 px-4 relative z-10">
         <div className="mx-auto max-w-[700px] py-6 space-y-6">
           {messages.length === 0 && (
             <div className="flex items-center justify-center min-h-[40vh]">
@@ -234,20 +232,19 @@ export function ChatArea() {
           <div ref={scrollRef} />
         </div>
       </ScrollArea>
-      )}
 
-      {!isMapSelectionMode && (
       <div className="relative z-10 pb-6 px-4 shrink-0">
         <form
           onSubmit={handleSubmit}
-          className="mx-auto max-w-[700px] flex items-center gap-2 bg-background border border-border rounded-full px-5 py-2.5 shadow-lg"
+          className="mx-auto max-w-[700px] flex items-center gap-2 bg-background/95 border border-border rounded-full px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80"
         >
           <button
             type="button"
             onClick={() => setIsMapSelectionMode(true)}
             disabled={isLoading}
             className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-            aria-label="Select location on map"
+            aria-label="Select region on map"
+            title="Select region on map"
           >
             <MapPin size={18} />
           </button>
@@ -268,6 +265,7 @@ export function ChatArea() {
           </button>
         </form>
       </div>
+        </>
       )}
     </main>
   );
