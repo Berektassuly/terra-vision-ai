@@ -4,9 +4,10 @@ node_modules
 # Build output
 dist
 dist-ssr
+.next
 *.local
 
-# Vite
+# Vite (legacy)
 .vite
 
 # Environment
