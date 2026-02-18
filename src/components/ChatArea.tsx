@@ -1,11 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Satellite, ArrowUp, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Satellite, ArrowUp, Loader2, MapPin } from "lucide-react";
 import { OrbitalPattern } from "./OrbitalPattern";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseUserIntent, bboxToPolygon } from "@/lib/chat-parser";
+import type { BBox } from "./MapSelector";
+
+const MapSelector = dynamic(
+  () => import("./MapSelector").then((m) => m.MapSelector),
+  { ssr: false }
+);
 
 type MessageRole = "user" | "assistant";
 
@@ -45,8 +52,18 @@ export function ChatArea() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMapSelectionMode, setIsMapSelectionMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const blobUrlsRef = useRef<string[]>([]);
+
+  function handleMapConfirm(bbox: BBox) {
+    setInput(bbox.join(","));
+    setIsMapSelectionMode(false);
+  }
+
+  function handleMapCancel() {
+    setIsMapSelectionMode(false);
+  }
 
   useEffect(() => {
     return () => {
@@ -139,8 +156,13 @@ export function ChatArea() {
 
   return (
     <main className="relative flex-1 flex flex-col h-screen bg-background overflow-hidden">
-      <OrbitalPattern />
+      {isMapSelectionMode ? (
+        <MapSelector onConfirm={handleMapConfirm} onCancel={handleMapCancel} />
+      ) : (
+        <OrbitalPattern />
+      )}
 
+      {!isMapSelectionMode && (
       <ScrollArea className="flex-1 px-4">
         <div className="mx-auto max-w-[700px] py-6 space-y-6">
           {messages.length === 0 && (
@@ -212,12 +234,23 @@ export function ChatArea() {
           <div ref={scrollRef} />
         </div>
       </ScrollArea>
+      )}
 
+      {!isMapSelectionMode && (
       <div className="relative z-10 pb-6 px-4 shrink-0">
         <form
           onSubmit={handleSubmit}
           className="mx-auto max-w-[700px] flex items-center gap-2 bg-background border border-border rounded-full px-5 py-2.5 shadow-lg"
         >
+          <button
+            type="button"
+            onClick={() => setIsMapSelectionMode(true)}
+            disabled={isLoading}
+            className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+            aria-label="Select location on map"
+          >
+            <MapPin size={18} />
+          </button>
           <input
             type="text"
             value={input}
@@ -235,6 +268,7 @@ export function ChatArea() {
           </button>
         </form>
       </div>
+      )}
     </main>
   );
 }
