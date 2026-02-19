@@ -3,7 +3,7 @@
  * streamText + server-side tools; JSON-based stream for useChat.
  */
 
-import { streamText, stepCountIs, tool, type ModelMessage, type LanguageModel } from "ai";
+import { streamText, stepCountIs, tool, convertToModelMessages, type LanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
@@ -28,15 +28,13 @@ Do not dump raw JSON stats. Interpret results for the user: e.g. "NDVI is 0.2, i
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { messages: rawMessages } = (await req.json()) as {
-    messages: Array<{ role: string; content: string }>;
-  };
-  const messages = rawMessages as ModelMessage[];
+  const { messages: rawMessages } = await req.json();
+  const messages = await convertToModelMessages(rawMessages);
 
   const activeProvider = process.env.ACTIVE_AI_PROVIDER?.toLowerCase();
   const model =
     (activeProvider === "gemini"
-      ? google("gemini-2.0-flash")
+      ? google("gemini-3-flash-preview")
       : openai("gpt-4o")) as LanguageModel;
 
   const result = streamText({
