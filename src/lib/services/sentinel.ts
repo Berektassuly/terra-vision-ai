@@ -142,7 +142,9 @@ export async function searchSatelliteImages(
 ): Promise<CatalogImageResult | null> {
   const token = await getAccessToken();
   const [minLon, minLat, maxLon, maxLat] = bbox;
-  const datetime = `${dateRange.from}/${dateRange.to}`;
+  const fromStr = dateRange.from.includes("T") ? dateRange.from : `${dateRange.from}T00:00:00Z`;
+  const toStr = dateRange.to.includes("T") ? dateRange.to : `${dateRange.to}T23:59:59Z`;
+  const datetime = `${fromStr}/${toStr}`;
 
   const payload = {
     bbox: [minLon, minLat, maxLon, maxLat],
@@ -151,12 +153,9 @@ export async function searchSatelliteImages(
     limit: 50,
     "filter-lang": "cql2-json",
     filter: {
-      op: "and",
-      args: [
-        { op: "lt", args: [{ property: "eo:cloud_cover" }, MAX_CLOUD_COVER_PERCENT] },
-      ],
+      op: "<",
+      args: [{ property: "eo:cloud_cover" }, MAX_CLOUD_COVER_PERCENT]
     },
-    sortby: [{ field: "properties.datetime", direction: "desc" }],
   };
 
   const res = await fetch(CATALOG_SEARCH_URL, {
@@ -181,7 +180,13 @@ export async function searchSatelliteImages(
     }>;
   };
 
-  const features = data.features ?? [];
+  const features = (data.features ?? []).slice().sort((a, b) => {
+    const aTime = a.properties?.datetime ?? "";
+    const bTime = b.properties?.datetime ?? "";
+    if (aTime === bTime) return 0;
+    // Newest first (descending)
+    return aTime < bTime ? 1 : -1;
+  });
   if (features.length === 0) return null;
 
   const best = features[0];
