@@ -3,8 +3,9 @@
  * streamText + server-side tools; JSON-based stream for useChat.
  */
 
-import { streamText, type CoreMessage } from "ai";
+import { streamText, stepCountIs, tool, type ModelMessage, type LanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { lookupLocation } from "@/lib/tools/geocoding";
 import {
@@ -30,18 +31,24 @@ export async function POST(req: Request) {
   const { messages: rawMessages } = (await req.json()) as {
     messages: Array<{ role: string; content: string }>;
   };
-  const messages = rawMessages as CoreMessage[];
+  const messages = rawMessages as ModelMessage[];
+
+  const activeProvider = process.env.ACTIVE_AI_PROVIDER?.toLowerCase();
+  const model =
+    (activeProvider === "gemini"
+      ? google("gemini-2.0-flash")
+      : openai("gpt-4o")) as LanguageModel;
 
   const result = streamText({
-    model: openai("gpt-4o"),
+    model,
     system: getSystemPrompt(),
     messages,
-    maxSteps: 5,
+    stopWhen: stepCountIs(5),
     tools: {
-      lookupLocation: {
+      lookupLocation: tool({
         description:
           "Look up a place by name (e.g. city, region, country) to get its bounding box. Use when the user mentions a location without coordinates.",
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe("Place name or address to geocode (e.g. Iowa, Berlin, Nebraska)"),
         }),
         execute: async ({ query }) => {
@@ -58,11 +65,11 @@ export async function POST(req: Request) {
             return { error: msg };
           }
         },
-      },
-      searchScenes: {
+      }),
+      searchScenes: tool({
         description:
           "Search the satellite catalog for Sentinel-2 L2A imagery in a bounding box and date range. Use to verify image availability before generating stats or NDVI.",
-        parameters: z.object({
+        inputSchema: z.object({
           bbox: z
             .array(z.number())
             .length(4)
@@ -94,11 +101,11 @@ export async function POST(req: Request) {
             return { error: msg };
           }
         },
-      },
-      getVegetationStats: {
+      }),
+      getVegetationStats: tool({
         description:
           "Get NDVI statistics (mean, min, max, stDev) for a bounding box on a given date. Use after resolving location and optionally checking searchScenes.",
-        parameters: z.object({
+        inputSchema: z.object({
           bbox: z
             .array(z.number())
             .length(4)
@@ -125,11 +132,11 @@ export async function POST(req: Request) {
             return { error: msg };
           }
         },
-      },
-      generateNDVI: {
+      }),
+      generateNDVI: tool({
         description:
           "Generate an NDVI health map image (PNG) for a bounding box on a given date. Red = low vegetation, green = high. Use when the user wants to see a map.",
-        parameters: z.object({
+        inputSchema: z.object({
           bbox: z
             .array(z.number())
             .length(4)
@@ -157,9 +164,9 @@ export async function POST(req: Request) {
             return { error: msg };
           }
         },
-      },
+      }),
     },
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }

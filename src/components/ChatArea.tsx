@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useChat } from "ai/react";
+import { DefaultChatTransport } from "ai";
+import { useChat } from "@ai-sdk/react";
 import { Satellite, ArrowUp, Loader2, MapPin } from "lucide-react";
 import { OrbitalPattern } from "./OrbitalPattern";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,20 +23,38 @@ const TOOL_LABELS: Record<string, (args: Record<string, unknown>) => string> = {
   generateNDVI: () => "🖼️ Generating NDVI image…",
 };
 
-/** Derive current tool status from the last assistant message for UI indicator. */
+/** Get display text from a UI message (v6 parts-based). */
+function getMessageText(msg: { parts: Array<{ type: string; text?: string }> }): string {
+  return (msg.parts ?? [])
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("");
+}
+
+/** Derive current tool status from the last assistant message for UI indicator (v6 parts-based). */
 function getActiveToolStatus(
-  messages: Array<{ role: string; toolInvocations?: Array<{ toolName?: string; state?: string; args?: Record<string, unknown> }> }>
+  messages: Array<{ role: string; parts?: unknown[] }>
 ): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg.role !== "assistant") continue;
-    const invs = msg.toolInvocations;
-    if (!invs?.length) continue;
-    const pending = invs.find(
-      (inv) => inv.state === "call" || inv.state === "partial-call" || !inv.state
+    const parts = (msg.parts ?? []) as Array<Record<string, unknown>>;
+    const pending = parts.find(
+      (p) =>
+        (String(p.type ?? "").startsWith("tool-") || "toolName" in p) &&
+        p.state !== "output-available" &&
+        p.state !== "output-error" &&
+        p.state !== "output-denied"
     );
-    if (pending?.toolName && TOOL_LABELS[pending.toolName]) {
-      return TOOL_LABELS[pending.toolName](pending.args ?? {});
+    const toolName = pending
+      ? ("toolName" in pending ? String(pending.toolName ?? "") : String((pending.type as string) ?? "").replace(/^tool-/, ""))
+      : "";
+    if (toolName && TOOL_LABELS[toolName]) {
+      const args =
+        pending && "input" in pending && pending.input && typeof pending.input === "object"
+          ? (pending.input as Record<string, unknown>)
+          : {};
+      return TOOL_LABELS[toolName](args);
     }
   }
   return null;
@@ -43,18 +62,16 @@ function getActiveToolStatus(
 
 export function ChatArea() {
   const [isMapSelectionMode, setIsMapSelectionMode] = useState(false);
+  const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const blobUrlsRef = useRef<string[]>([]);
 
   const {
     messages,
-    append,
+    sendMessage,
     status,
-    input,
-    setInput,
   } = useChat({
-    api: "/api/chat",
-    body: {},
+    transport: new DefaultChatTransport({ api: "/api/chat", body: {} }),
   });
 
   const isLoading = status === "streaming" || status === "submitted";
@@ -85,7 +102,7 @@ export function ChatArea() {
     const text = input.trim();
     if (!text || isLoading) return;
     setInput("");
-    append({ role: "user", content: text });
+    sendMessage({ text });
   }
 
   return (
@@ -125,22 +142,34 @@ export function ChatArea() {
                         : "rounded-2xl rounded-bl-md px-4 py-2.5 bg-muted/50 border border-border max-w-[85%] space-y-2"
                     }
                   >
-                    {msg.role === "user" && typeof msg.content === "string" && (
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    )}
-                    {msg.role === "assistant" && (
+                    {msg.role === "user" && (() => {
+                      const text = getMessageText(msg);
+                      return text ? <p className="text-sm whitespace-pre-wrap">{text}</p> : null;
+                    })()}
+                    {msg.role === "assistant" && (() => {
+                      const text = getMessageText(msg);
+                      return (
                       <>
-                        {typeof msg.content === "string" && msg.content ? (
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        {text ? (
+                          <p className="text-sm whitespace-pre-wrap">{text}</p>
                         ) : null}
-                        {Array.isArray(msg.toolInvocations) &&
-                          msg.toolInvocations.map((inv) => {
-                            const result = "result" in inv ? (inv.result as Record<string, unknown>) : undefined;
-                            if (result?.imageDataUrl) {
-                              const dataUrl = result.imageDataUrl as string;
+                        {(msg.parts ?? []).map((part, idx) => {
+                          const isTool = part.type?.startsWith("tool-") || "toolName" in part;
+                          if (!isTool) return null;
+                          const inv = part as {
+                            toolCallId?: string;
+                            toolName?: string;
+                            state?: string;
+                            output?: Record<string, unknown>;
+                            errorText?: string;
+                          };
+                          const toolId = inv.toolCallId ?? inv.toolName ?? String(idx);
+                          if (inv.state === "output-available" && inv.output) {
+                            if ((inv.output as { imageDataUrl?: string }).imageDataUrl) {
+                              const dataUrl = (inv.output as { imageDataUrl: string }).imageDataUrl;
                               return (
                                 <div
-                                  key={inv.toolCallId ?? inv.toolName}
+                                  key={toolId}
                                   className="mt-2 rounded-lg overflow-hidden border border-border"
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -152,20 +181,26 @@ export function ChatArea() {
                                 </div>
                               );
                             }
-                            if (result && "error" in result) {
-                              return (
-                                <p
-                                  key={inv.toolCallId ?? inv.toolName}
-                                  className="text-xs text-destructive mt-1"
-                                >
-                                  {String(result.error)}
-                                </p>
-                              );
-                            }
-                            return null;
-                          })}
+                          }
+                          if (inv.state === "output-error" && inv.errorText) {
+                            return (
+                              <p key={toolId} className="text-xs text-destructive mt-1">
+                                {inv.errorText}
+                              </p>
+                            );
+                          }
+                          if (inv.output && typeof inv.output === "object" && "error" in inv.output) {
+                            return (
+                              <p key={toolId} className="text-xs text-destructive mt-1">
+                                {String((inv.output as { error: unknown }).error)}
+                              </p>
+                            );
+                          }
+                          return null;
+                        })}
                       </>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
