@@ -8,7 +8,6 @@ Developed by the **One Day Team** for the **AEROO SPACE AI COMPETITION**, TerraV
 
 **Badges**
 
-[![Version](https://img.shields.io/badge/version-0.0.0-blue)](./package.json)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![OpenAI GPT-4o](https://img.shields.io/badge/OpenAI-GPT--4o-412991?logo=openai)](https://platform.openai.com/)
