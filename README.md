@@ -8,8 +8,9 @@ Developed by the **One Day Team** for the **AEROO SPACE AI COMPETITION**, TerraV
 
 **Badges**
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Version](https://img.shields.io/badge/version-0.0.0-blue)](./package.json)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![OpenAI GPT-4o](https://img.shields.io/badge/OpenAI-GPT--4o-412991?logo=openai)](https://platform.openai.com/)
 [![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-Agentic%20Chat-black?logo=vercel)](https://sdk.vercel.ai/)
 [![Sentinel Hub](https://img.shields.io/badge/Sentinel%20Hub-EO%20APIs-00A651)](https://www.sentinel-hub.com/)
@@ -25,12 +26,12 @@ TerraVision AI is organized into clear layers: presentation, AI orchestration, a
 
 | Layer | Technologies |
 |-------|---------------|
-| **Frontend** | Next.js 14 (App Router), React, Tailwind CSS, shadcn/ui, Leaflet (MapSelector) |
-| **AI / LLM** | Vercel AI SDK (`ai`, `ai/react`), OpenAI GPT-4o (`@ai-sdk/openai`), agentic workflow with tool calling |
+| **Frontend** | Next.js 16 (App Router), React 18, Tailwind CSS, shadcn/ui, Leaflet (MapSelector) |
+| **AI / LLM** | Vercel AI SDK v6 (`ai`, `@ai-sdk/react`), OpenAI GPT-4o (`@ai-sdk/openai`), agentic workflow with tool calling |
 | **Earth Observation** | Sentinel Hub (EU-Central-1): Catalog API, Process API, Statistical API; OpenStreetMap Nominatim (geocoding) |
 
 - **Presentation (Frontend)**  
-  Next.js 14 with the App Router powers the application; React components provide the chat and map experience. Tailwind CSS and shadcn/ui handle styling and accessible UI primitives. Leaflet is used inside `MapSelector` for interactive bounding-box selection of Areas of Interest (AOIs).
+  Next.js 16 with the App Router powers the application; React components provide the chat and map experience. Tailwind CSS and shadcn/ui handle styling and accessible UI primitives. Leaflet is used inside `MapSelector` for interactive bounding-box selection of Areas of Interest (AOIs).
 
 - **AI / LLM Orchestration**  
   The Smart Agronomist runs in `src/app/api/chat/route.ts` using the Vercel AI SDK `streamText` API and OpenAI's GPT-4o. The agent uses structured tools: `lookupLocation`, `searchScenes`, `getVegetationStats`, and `generateNDVI`, invoked autonomously in multi-step turns (`maxSteps: 5`).

@@ -20,6 +20,7 @@ const TOOL_LABELS: Record<string, (args: Record<string, unknown>) => string> = {
   searchScenes: () => "🛰️ Searching satellite catalog…",
   getVegetationStats: () => "📊 Computing vegetation stats…",
   generateNDVI: () => "🖼️ Generating NDVI image…",
+  generateTrueColor: () => "📸 Generating true color satellite photo…",
 };
 
 /** Get display text from a UI message (v6 parts-based). */

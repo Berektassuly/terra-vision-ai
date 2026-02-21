@@ -197,6 +197,21 @@ export async function searchSatelliteImages(
   };
 }
 
+/** True Color evalscript: B04 (R), B03 (G), B02 (B) with brightness boost. */
+const TRUE_COLOR_EVALSCRIPT = `
+//VERSION=3
+function setup() {
+  return {
+    input: ["B02", "B03", "B04"],
+    output: { bands: 3, sampleType: "AUTO" }
+  };
+}
+function evaluatePixel(sample) {
+  // Multiply by 2.5 to increase brightness
+  return [2.5 * sample.B04, 2.5 * sample.B03, 2.5 * sample.B02];
+}
+`.trim();
+
 /** NDVI evalscript: (B08 - B04) / (B08 + B04), mapped to Red (low) -> Green (high) PNG. */
 const NDVI_EVALSCRIPT_IMAGE = `
 //VERSION=3
@@ -259,6 +274,64 @@ export async function generateNDVIImage(
   const form = new FormData();
   form.append("request", JSON.stringify(requestBody));
   form.append("evalscript", NDVI_EVALSCRIPT_IMAGE);
+
+  const res = await fetch(PROCESS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "image/png",
+    },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sentinel Hub Process API failed (${res.status}): ${text}`);
+  }
+
+  return res.arrayBuffer();
+}
+
+/**
+ * Process API – generate True Color (RGB) satellite image as PNG.
+ */
+export async function generateTrueColorImage(
+  bbox: BBox,
+  date: string,
+  width: number,
+  height: number
+): Promise<ArrayBuffer> {
+  const token = await getAccessToken();
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+
+  const requestBody = {
+    input: {
+      bounds: {
+        properties: { crs: CRS_WGS84 },
+        bbox: [minLon, minLat, maxLon, maxLat],
+      },
+      data: [
+        {
+          type: COLLECTION_S2L2A,
+          dataFilter: {
+            timeRange: {
+              from: `${date}T00:00:00Z`,
+              to: `${date}T23:59:59Z`,
+            },
+          },
+        },
+      ],
+    },
+    output: {
+      width,
+      height,
+      responses: [{ identifier: "default", format: { type: "image/png" } }],
+    },
+  };
+
+  const form = new FormData();
+  form.append("request", JSON.stringify(requestBody));
+  form.append("evalscript", TRUE_COLOR_EVALSCRIPT);
 
   const res = await fetch(PROCESS_URL, {
     method: "POST",

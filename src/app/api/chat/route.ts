@@ -12,6 +12,7 @@ import {
   searchSatelliteImages,
   getVegetationStats,
   generateNDVIImage,
+  generateTrueColorImage,
   extractNDVIStatsForLLM,
 } from "@/lib/services/sentinel";
 import { bboxToPolygon } from "@/lib/chat-parser";
@@ -27,6 +28,8 @@ You are interacting with strict, production-grade tools. You MUST:
 CRITICAL: Satellites do not fly every day. NEVER guess a date for getVegetationStats or generateNDVI. You MUST ALWAYS call searchScenes first with a broad dateRange (for example, the last 30 days) to find a valid image. Extract the EXACT timestamp (YYYY-MM-DD) from the searchScenes result and use ONLY that date for subsequent getVegetationStats or generateNDVI tool calls. If searchScenes finds no image, explain this to the user and DO NOT call getVegetationStats or generateNDVI.
 
 When the user mentions a place name (e.g. "Iowa", "Berlin"), use the lookupLocation tool first to get coordinates (bbox). Then always use searchScenes to check image availability, and only then call getVegetationStats or generateNDVI as needed.
+
+If the user asks to see a real photo, normal image, or true color view of the field, use the generateTrueColor tool (after resolving location and checking searchScenes for a valid date).
 
 Do not dump raw JSON stats. Interpret results for the user: e.g. "NDVI is 0.2, indicating potential drought stress" or "Mean NDVI 0.65 suggests healthy vegetation." Be concise and actionable.`;
 }
@@ -165,6 +168,38 @@ export async function POST(req: Request) {
             };
           } catch (err) {
             const msg = err instanceof Error ? err.message : "NDVI image generation failed.";
+            return { error: msg };
+          }
+        },
+      }),
+      generateTrueColor: tool({
+        description:
+          "Generate a true color (RGB) satellite photo for a bounding box on a given date. Use when the user asks for a real photo, normal view, or true color image.",
+        inputSchema: z.object({
+          bbox: z
+            .array(z.number())
+            .length(4)
+            .describe("Bounding box [minLon, minLat, maxLon, maxLat]"),
+          date: z.string().describe("Date YYYY-MM-DD"),
+        }),
+        execute: async ({ bbox, date }) => {
+          try {
+            const width = 512;
+            const height = 512;
+            const buffer = await generateTrueColorImage(
+              bbox as [number, number, number, number],
+              date,
+              width,
+              height
+            );
+            const base64 = Buffer.from(buffer).toString("base64");
+            return {
+              success: true,
+              imageDataUrl: `data:image/png;base64,${base64}`,
+              message: "True color image generated.",
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "True color image generation failed.";
             return { error: msg };
           }
         },
