@@ -7,6 +7,9 @@ import { Satellite, Sprout, History, Settings, ChevronLeft, ChevronRight } from 
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+/** Set to true when sidebar nav (Crop, History, Settings) is ready */
+const SHOW_SIDEBAR = false;
+
 const navItems = [
   { title: "Satellite Imagery", icon: Satellite, href: "/" },
   { title: "Crop Analysis", icon: Sprout, href: "/crop" },
@@ -18,6 +21,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
+
+  if (!SHOW_SIDEBAR) return null;
 
   return (
     <aside
