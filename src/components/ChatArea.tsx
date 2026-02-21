@@ -4,9 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { Satellite, ArrowUp, Loader2, MapPin } from "lucide-react";
+import { ArrowUp, MapPin, X } from "lucide-react";
 import { OrbitalPattern } from "./OrbitalPattern";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { BBox } from "./MapSelector";
 
@@ -63,7 +62,9 @@ function getActiveToolStatus(
 export function ChatArea() {
   const [isMapSelectionMode, setIsMapSelectionMode] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const blobUrlsRef = useRef<string[]>([]);
 
   const {
@@ -97,6 +98,18 @@ export function ChatArea() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  /** Auto-resize textarea to fit content, capped by max height (scrollbar appears after). */
+  function adjustTextareaHeight() {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
@@ -107,19 +120,47 @@ export function ChatArea() {
 
   return (
     <main className="relative flex-1 flex flex-col h-screen bg-background overflow-hidden">
+      {/* Full-screen lightbox for NDVI map */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="NDVI map full screen view"
+          onClick={() => setSelectedImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedImage(null)}
+            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            className="relative max-h-[90vh] max-w-[90vw] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={selectedImage}
+              alt="NDVI map full size"
+              className="max-h-[90vh] max-w-full w-auto h-auto object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
       {isMapSelectionMode ? (
         <MapSelector onConfirm={handleMapConfirm} onCancel={handleMapCancel} />
       ) : (
         <>
           <OrbitalPattern />
           <ScrollArea className="flex-1 px-4 relative z-10">
-            <div className="mx-auto max-w-[700px] py-6 space-y-6">
+            <div className="max-w-[768px] mx-auto w-full py-6 space-y-6">
               {messages.length === 0 && (
                 <div className="flex items-center justify-center min-h-[40vh]">
                   <div className="text-center max-w-md px-6">
-                    <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center">
-                      <Satellite size={32} className="text-foreground/60" />
-                    </div>
                     <h1 className="text-2xl font-semibold text-foreground mb-3">
                       Welcome to TerraVision AI.
                     </h1>
@@ -131,91 +172,96 @@ export function ChatArea() {
               )}
 
               {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={msg.role === "user" ? "flex justify-end" : "flex justify-start"}
-                >
-                  <div
-                    className={
-                      msg.role === "user"
-                        ? "rounded-2xl rounded-br-md px-4 py-2.5 bg-primary text-primary-foreground max-w-[85%]"
-                        : "rounded-2xl rounded-bl-md px-4 py-2.5 bg-muted/50 border border-border max-w-[85%] space-y-2"
-                    }
-                  >
-                    {msg.role === "user" && (() => {
-                      const text = getMessageText(msg);
-                      return text ? <p className="text-sm whitespace-pre-wrap">{text}</p> : null;
-                    })()}
-                    {msg.role === "assistant" && (() => {
-                      const text = getMessageText(msg);
-                      return (
-                      <>
-                        {text ? (
-                          <p className="text-sm whitespace-pre-wrap">{text}</p>
-                        ) : null}
-                        {(msg.parts ?? []).map((part, idx) => {
-                          const isTool = part.type?.startsWith("tool-") || "toolName" in part;
-                          if (!isTool) return null;
-                          const inv = part as {
-                            toolCallId?: string;
-                            toolName?: string;
-                            state?: string;
-                            output?: Record<string, unknown>;
-                            errorText?: string;
-                          };
-                          const toolId = inv.toolCallId ?? inv.toolName ?? String(idx);
-                          if (inv.state === "output-available" && inv.output) {
-                            if ((inv.output as { imageDataUrl?: string }).imageDataUrl) {
-                              const dataUrl = (inv.output as { imageDataUrl: string }).imageDataUrl;
+                <div key={msg.id} className="w-full">
+                  {msg.role === "user" && (() => {
+                    const text = getMessageText(msg);
+                    return text ? (
+                      <div className="flex justify-end w-full">
+                        <div className="bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 max-w-[85%]">
+                          <p className="text-sm whitespace-pre-wrap">
+                            {text}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {msg.role === "assistant" && (() => {
+                    const text = getMessageText(msg);
+                    return (
+                      <div className="flex justify-start w-full">
+                        <div className="w-full max-w-full space-y-4">
+                          {text ? (
+                            <p className="text-sm sm:text-base whitespace-pre-wrap text-foreground leading-relaxed">
+                              {text}
+                            </p>
+                          ) : null}
+                          {(msg.parts ?? []).map((part, idx) => {
+                            const isTool = part.type?.startsWith("tool-") || "toolName" in part;
+                            if (!isTool) return null;
+                            const inv = part as {
+                              toolCallId?: string;
+                              toolName?: string;
+                              state?: string;
+                              output?: Record<string, unknown>;
+                              errorText?: string;
+                            };
+                            const toolId = inv.toolCallId ?? inv.toolName ?? String(idx);
+                            if (inv.state === "output-available" && inv.output) {
+                              if ((inv.output as { imageDataUrl?: string }).imageDataUrl) {
+                                const dataUrl = (inv.output as { imageDataUrl: string }).imageDataUrl;
+                                return (
+                                  <div
+                                    key={toolId}
+                                    className="overflow-hidden rounded-xl border border-border/50 max-w-[512px] w-fit cursor-pointer"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setSelectedImage(dataUrl)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setSelectedImage(dataUrl);
+                                      }
+                                    }}
+                                    aria-label="View NDVI map full screen"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={dataUrl}
+                                      alt="NDVI map"
+                                      className="max-w-full h-auto block"
+                                    />
+                                  </div>
+                                );
+                              }
+                            }
+                            if (inv.state === "output-error" && inv.errorText) {
                               return (
-                                <div
-                                  key={toolId}
-                                  className="mt-2 rounded-lg overflow-hidden border border-border"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={dataUrl}
-                                    alt="NDVI"
-                                    className="max-w-full h-auto block"
-                                  />
-                                </div>
+                                <p key={toolId} className="text-xs text-destructive mt-0">
+                                  {inv.errorText}
+                                </p>
                               );
                             }
-                          }
-                          if (inv.state === "output-error" && inv.errorText) {
-                            return (
-                              <p key={toolId} className="text-xs text-destructive mt-1">
-                                {inv.errorText}
-                              </p>
-                            );
-                          }
-                          if (inv.output && typeof inv.output === "object" && "error" in inv.output) {
-                            return (
-                              <p key={toolId} className="text-xs text-destructive mt-1">
-                                {String((inv.output as { error: unknown }).error)}
-                              </p>
-                            );
-                          }
-                          return null;
-                        })}
-                      </>
-                      );
-                    })()}
-                  </div>
+                            if (inv.output && typeof inv.output === "object" && "error" in inv.output) {
+                              return (
+                                <p key={toolId} className="text-xs text-destructive mt-0">
+                                  {String((inv.output as { error: unknown }).error)}
+                                </p>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
 
               {(isLoading || activeToolStatus) && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-muted/50 border border-border flex items-center gap-2">
-                    <Loader2
-                      size={18}
-                      className="animate-spin text-muted-foreground shrink-0"
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {activeToolStatus ?? "Thinking…"}
-                    </span>
-                  </div>
+                <div className="flex justify-start w-full">
+                  <p className="text-sm text-muted-foreground">
+                    {activeToolStatus ?? "Thinking…"}
+                  </p>
                 </div>
               )}
               <div ref={scrollRef} />
@@ -225,30 +271,32 @@ export function ChatArea() {
           <div className="relative z-10 pb-6 px-4 shrink-0">
             <form
               onSubmit={handleSubmit}
-              className="mx-auto max-w-[700px] flex items-center gap-2 bg-background/95 border border-border rounded-full px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80"
+              className="max-w-[768px] mx-auto w-full flex items-end gap-2 bg-background/95 border border-border rounded-2xl px-4 pt-3 pb-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80"
             >
               <button
                 type="button"
                 onClick={() => setIsMapSelectionMode(true)}
                 disabled={isLoading}
-                className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 mb-0.5"
                 aria-label="Select region on map"
                 title="Select region on map"
               >
                 <MapPin size={18} />
               </button>
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about satellite data or crop health..."
-                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none overflow-y-auto max-h-[30vh] min-h-[1.5rem] py-1.5"
                 disabled={isLoading}
+                style={{ height: "auto" }}
               />
               <button
                 type="submit"
                 disabled={isLoading}
-                className="shrink-0 w-9 h-9 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="shrink-0 w-9 h-9 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 mb-0.5"
               >
                 <ArrowUp size={18} className="text-primary-foreground" />
               </button>
