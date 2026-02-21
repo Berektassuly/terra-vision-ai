@@ -234,20 +234,7 @@ export function ChatArea() {
                                 );
                               }
                             }
-                            if (inv.state === "output-error" && inv.errorText) {
-                              return (
-                                <p key={toolId} className="text-xs text-destructive mt-0">
-                                  {inv.errorText}
-                                </p>
-                              );
-                            }
-                            if (inv.output && typeof inv.output === "object" && "error" in inv.output) {
-                              return (
-                                <p key={toolId} className="text-xs text-destructive mt-0">
-                                  {String((inv.output as { error: unknown }).error)}
-                                </p>
-                              );
-                            }
+                            // Tool errors are not rendered; the LLM explains them in its text response.
                             return null;
                           })}
                         </div>
